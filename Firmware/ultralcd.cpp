@@ -8273,7 +8273,7 @@ static bool lcd_selfcheck_check_heater(bool _isbed)
 
 	if (_opposite_result < ((_isbed) ? 30 : 9))
 	{
-		if (_checked_result >= ((_isbed) ? 9 : 30))
+		if (_checked_result >= ((_isbed) ? 9 : 20))
 		{
 			_stepresult = true;
 		}
