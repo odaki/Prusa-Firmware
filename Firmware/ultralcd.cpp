@@ -7075,7 +7075,7 @@ static bool lcd_selfcheck_check_heater(bool _isbed)
 	*/
 
     bool _stepresult = false;
-    if (Stopped || _opposite_result < ((_isbed) ? 20 : 9))
+    if (Stopped || _opposite_result < ((_isbed) ? 30 : 9))
     {
         if (!Stopped && _checked_result >= ((_isbed) ? 9 : 20))
             _stepresult = true;
