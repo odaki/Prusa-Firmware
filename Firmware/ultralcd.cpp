@@ -99,7 +99,6 @@ static void lcd_language_menu();
 static void lcd_main_menu();
 static void lcd_tune_menu();
 static void lcd_settings_menu();
-static void lcd_calibration_menu();
 static void lcd_control_temperature_menu();
 #ifdef TMC2130
 static void lcd_settings_linearity_correction_menu_save();
@@ -1606,10 +1605,8 @@ static void lcd_support_menu()
 
   MENU_ITEM_BACK_P(PSTR("Firmware:"));
   MENU_ITEM_BACK_P(PSTR(" " FW_VERSION_FULL));
-#if (FW_DEV_VERSION != FW_VERSION_GOLD) && (FW_DEV_VERSION != FW_VERSION_RC)
-  MENU_ITEM_BACK_P(PSTR(" repo " FW_REPOSITORY));
-#endif
-
+  MENU_ITEM_BACK_P(PSTR(" Repo:" FW_REPOSITORY));
+  MENU_ITEM_BACK_P(PSTR(" Hash:" FW_COMMIT_HASH));
   MENU_ITEM_BACK_P(_n("prusa3d.com"));////MSG_PRUSA3D c=18
   MENU_ITEM_BACK_P(_n("forum.prusa3d.com"));////MSG_PRUSA3D_FORUM c=18
   MENU_ITEM_BACK_P(_n("help.prusa3d.com"));////MSG_PRUSA3D_HELP c=18
@@ -4561,20 +4558,18 @@ static void lcd_settings_linearity_correction_menu_save()
 
 static void lcd_calibration_menu()
 {
-  MENU_BEGIN();
-  MENU_ITEM_BACK_P(_T(MSG_MAIN));
-  if (!isPrintPaused)
-  {
-	MENU_ITEM_FUNCTION_P(_i("Wizard"), lcd_wizard);////MSG_WIZARD c=17
+    MENU_BEGIN();
+    MENU_ITEM_BACK_P(_T(MSG_MAIN));
+    MENU_ITEM_FUNCTION_P(_i("Wizard"), lcd_wizard);////MSG_WIZARD c=17
     if (lcd_commands_type == LcdCommands::Idle)
     {
-         MENU_ITEM_SUBMENU_P(_T(MSG_V2_CALIBRATION), lcd_first_layer_calibration_reset);
+        MENU_ITEM_SUBMENU_P(_T(MSG_V2_CALIBRATION), lcd_first_layer_calibration_reset);
     }
-	MENU_ITEM_GCODE_P(_T(MSG_AUTO_HOME), G28W);
+    MENU_ITEM_GCODE_P(_T(MSG_AUTO_HOME), G28W);
 #ifdef TMC2130
-	MENU_ITEM_FUNCTION_P(_i("Belt test"), lcd_belttest_v);////MSG_BELTTEST c=18
+    MENU_ITEM_FUNCTION_P(_i("Belt test"), lcd_belttest_v);////MSG_BELTTEST c=18
 #endif //TMC2130
-	MENU_ITEM_FUNCTION_P(_i("Selftest"), lcd_selftest_v);////MSG_SELFTEST c=18
+    MENU_ITEM_FUNCTION_P(_i("Selftest"), lcd_selftest_v);////MSG_SELFTEST c=18
     // MK2
     MENU_ITEM_FUNCTION_P(_i("Calibrate XYZ"), lcd_mesh_calibration);////MSG_CALIBRATE_BED c=18
     // "Calibrate Z" with storing the reference values to EEPROM.
@@ -4583,21 +4578,21 @@ static void lcd_calibration_menu()
     MENU_ITEM_SUBMENU_P(_T(MSG_MESH_BED_LEVELING), lcd_mesh_bedleveling); ////MSG_MESH_BED_LEVELING c=18
 
     MENU_ITEM_SUBMENU_P(_i("Bed level correct"), lcd_adjust_bed);////MSG_BED_CORRECTION_MENU c=18
-	MENU_ITEM_SUBMENU_P(_i("PID calibration"), pid_extruder);////MSG_PID_EXTRUDER c=17
+    MENU_ITEM_SUBMENU_P(_i("PID calibration"), pid_extruder);////MSG_PID_EXTRUDER c=17
 #ifndef TMC2130
     MENU_ITEM_SUBMENU_P(_i("Show end stops"), menu_show_end_stops);////MSG_SHOW_END_STOPS c=18
 #endif
     MENU_ITEM_GCODE_P(_i("Reset XYZ calibr."), PSTR("M44"));////MSG_CALIBRATE_BED_RESET c=18
 #ifdef PINDA_THERMISTOR
     if(has_temperature_compensation())
-	    MENU_ITEM_FUNCTION_P(_T(MSG_PINDA_CALIBRATION), lcd_calibrate_pinda);
+        MENU_ITEM_FUNCTION_P(_T(MSG_PINDA_CALIBRATION), lcd_calibrate_pinda);
 #endif
-  }
+
 #ifdef THERMAL_MODEL
     MENU_ITEM_SUBMENU_P(_n("Thermal Model cal."), lcd_thermal_model_cal);
 #endif //THERMAL_MODEL
-  
-  MENU_END();
+
+    MENU_END();
 }
 
 //! @brief Select one of numbered items
@@ -5017,7 +5012,6 @@ void lcd_resume_print()
     lcd_setstatuspgm(_T(MSG_FINISHING_MOVEMENTS));
     st_synchronize();
     custom_message_type = CustomMsg::Resuming;
-    isPrintPaused = false;
 
     // resume processing USB commands again and restore hotend fan state (in case the print was
     // stopped due to a thermal error)
@@ -5025,6 +5019,7 @@ void lcd_resume_print()
     Stopped = false;
 
     restore_print_from_ram_and_continue(default_retraction);
+    isPrintPaused = false;
     pause_time += (_millis() - start_pause_print); //accumulate time when print is paused for correct statistics calculation
     refresh_cmd_timeout();
     SERIAL_PROTOCOLLNRPGM(MSG_OCTOPRINT_RESUMED); //resume octoprint
@@ -5241,37 +5236,44 @@ static void lcd_main_menu()
         MENU_ITEM_SUBMENU_P(_T(MSG_TM_ACK_ERROR), lcd_print_stop);
     }
 #endif
+
+    // only allow starting SD print if hardware errors (temperature or fan) are cleared
+    if(!get_temp_error()
+#ifdef FANCHECK
+            && fan_check_error != EFCE_REPORTED
+#endif //FANCHECK
+    )
+    {
 #ifdef SDSUPPORT //!@todo SDSUPPORT undefined creates several issues in source code
-    if (card.cardOK || lcd_commands_type != LcdCommands::Idle) {
-        if (!card.isFileOpen()) {
-            if (!usb_timer.running() && (lcd_commands_type == LcdCommands::Idle)) {
-                bMain=true;               // flag ('fake parameter') for 'lcd_sdcard_menu()' function
-                MENU_ITEM_SUBMENU_P(_T(MSG_CARD_MENU), lcd_sdcard_menu);
-            }
+        if (card.cardOK || lcd_commands_type != LcdCommands::Idle) {
+            if (!card.isFileOpen()) {
+                if (!usb_timer.running() && (lcd_commands_type == LcdCommands::Idle)) {
+                    bMain=true;               // flag ('fake parameter') for 'lcd_sdcard_menu()' function
+                    MENU_ITEM_SUBMENU_P(_T(MSG_CARD_MENU), lcd_sdcard_menu);
+                }
 #if SDCARDDETECT < 1
-        MENU_ITEM_GCODE_P(_i("Change SD card"), PSTR("M21"));  // SD-card changed by user ////MSG_CNG_SDCARD c=18
+            MENU_ITEM_GCODE_P(_i("Change SD card"), PSTR("M21"));  // SD-card changed by user ////MSG_CNG_SDCARD c=18
+#endif //SDCARDDETECT
+            }
+        } else {
+            bMain=true;                                   // flag (i.e. 'fake parameter') for 'lcd_sdcard_menu()' function
+            MENU_ITEM_SUBMENU_P(_i("No SD card"), lcd_sdcard_menu); ////MSG_NO_CARD c=18
+#if SDCARDDETECT < 1
+            MENU_ITEM_GCODE_P(_i("Init. SD card"), PSTR("M21")); // Manually initialize the SD-card via user interface ////MSG_INIT_SDCARD c=18
 #endif //SDCARDDETECT
         }
-    } else {
-        bMain=true;                                   // flag (i.e. 'fake parameter') for 'lcd_sdcard_menu()' function
-        MENU_ITEM_SUBMENU_P(_i("No SD card"), lcd_sdcard_menu); ////MSG_NO_CARD c=18
-#if SDCARDDETECT < 1
-        MENU_ITEM_GCODE_P(_i("Init. SD card"), PSTR("M21")); // Manually initialize the SD-card via user interface ////MSG_INIT_SDCARD c=18
-#endif //SDCARDDETECT
-    }
 #endif //SDSUPPORT
+    }
 
-    if(!isPrintPaused && !printJobOngoing() && (lcd_commands_type == LcdCommands::Idle)) {
-        if (!farm_mode) {
-            const int8_t sheet = eeprom_read_byte(&(EEPROM_Sheets_base->active_sheet));
-            const int8_t nextSheet = eeprom_next_initialized_sheet(sheet);
-            if ((nextSheet >= 0) && (sheet != nextSheet)) { // show menu only if we have 2 or more sheets initialized
-                MENU_ITEM_FUNCTION_E(EEPROM_Sheets_base->s[sheet], eeprom_switch_to_next_sheet);
-            }
+    if(!printer_active() && !farm_mode) {
+        const int8_t sheet = eeprom_read_byte(&(EEPROM_Sheets_base->active_sheet));
+        const int8_t nextSheet = eeprom_next_initialized_sheet(sheet);
+        if ((nextSheet >= 0) && (sheet != nextSheet)) { // show menu only if we have 2 or more sheets initialized
+            MENU_ITEM_FUNCTION_E(EEPROM_Sheets_base->s[sheet], eeprom_switch_to_next_sheet);
         }
     }
 
-    if ( ! ( printJobOngoing() || (lcd_commands_type != LcdCommands::Idle) || (eFilamentAction != FilamentAction::None) || Stopped ) ) {
+    if ( ! ( printer_active() || (eFilamentAction != FilamentAction::None) || Stopped ) ) {
         if (MMU2::mmu2.Enabled()) {
             if(!MMU2::mmu2.FindaDetectsFilament() && !fsensor.getFilamentPresent()) {
                 // The MMU 'Load filament' state machine will reject the command if any 
@@ -5298,8 +5300,8 @@ static void lcd_main_menu()
             }
             MENU_ITEM_SUBMENU_P(_T(MSG_UNLOAD_FILAMENT), lcd_unLoadFilament);
         }
-    MENU_ITEM_SUBMENU_P(_T(MSG_SETTINGS), lcd_settings_menu);
-    if(!isPrintPaused && (custom_message_type != CustomMsg::Resuming)) MENU_ITEM_SUBMENU_P(_T(MSG_CALIBRATION), lcd_calibration_menu);
+        MENU_ITEM_SUBMENU_P(_T(MSG_SETTINGS), lcd_settings_menu);
+        if(!isPrintPaused) MENU_ITEM_SUBMENU_P(_T(MSG_CALIBRATION), lcd_calibration_menu);
     }
 
     if (!usb_timer.running() && (lcd_commands_type == LcdCommands::Idle)) {
